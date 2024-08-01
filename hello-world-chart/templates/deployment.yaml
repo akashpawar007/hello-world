@@ -1,0 +1,69 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "hello-world.fullname" . }}
+  labels:
+    {{- include "hello-world.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "hello-world.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "hello-world.selectorLabels" . | nindent 8 }}
+      annotations:
+        checksum/sample-config: {{ include (print $.Template.BasePath "/sample.yaml") . | sha256sum }}
+    spec:
+      serviceAccountName: {{ include "hello-world.serviceAccountName" . }}
+      containers:
+        - name: {{ .Chart.Name }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 80
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+
+          volumeMounts:
+            - name: pod-data 
+              mountPath: /home/application/datapath  
+            - name: sample-config-file
+              mountPath: /home/application/conf
+            
+            - name: hello-{{ include "getListValues" . }}
+           
+
+      {{- if (true)}}
+      initContainers:
+        - name: take-data-from-configmap
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ['/bin/bash', '-c', '/tmp/pod-data; cp -r /tmp/data-from-cm/data.properties /tmp/pod-data']
+          volumeMounts:
+            - name: data-from-cm
+              mountPath: /tmp/data-from-cm/data.properties
+            - name: pod-data
+              mountPath: /tmp/pod-data
+            {{- range  $item := .Values.languages.list }}
+            - name: {{ $item }}
+            {{- end }}
+      {{- end }}
+      volumes:
+        - name: data-from-cm
+          configMap:
+            name: data
+        - name: pod-data
+          emptyDir: {}
+        - name: sample-config-file
+          configMap:
+            name: sample-config
